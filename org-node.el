@@ -110,10 +110,10 @@
 
 (defcustom org-node-rescan-functions nil
   "Hook run after scanning specific files.
-It is not run after a full cache reset, only after a file is
+Not run after a full cache reset, only after e.g. a file is
 saved or renamed causing an incremental update to the cache.
 
-Called with one argument: a list of files re-scanned."
+Called with one argument: the list of files re-scanned."
   :group 'org-node
   :type 'hook)
 
@@ -476,7 +476,7 @@ or you can visit the homepage:
               "Returns node's TODO state."))
 
 ;; It's safe to alias an accessor, because they are all read only
-(defalias 'org-node-get-props 'org-node-get-properties)
+(defalias 'org-node-get-props #'org-node-get-properties)
 
 (cl-defstruct (org-node-link (:constructor org-node-link--make-obj)
                              (:copier nil))
@@ -730,7 +730,7 @@ In broad strokes:
 ;; 1. The ongoing full scan may have already gone past the targeted file at the
 ;;    exact time an order comes in to scan that file, but not be done yet
 ;;    (unlikely on a reasonably fast machine)
-;; 2. Only a targeted scan will execute `org-node-rescan-hook', for good reason
+;; 2. Only a targeted scan will execute `org-node-rescan-functions', for good reason
 ;;
 ;; Hm, point 2 could be taken care of after full scan by comparing to
 ;; `org-node--file<>mtime'.  And point 1 by just... allowing the different
@@ -1019,6 +1019,9 @@ to FINALIZER."
       ;; Merge N result-sets into one result-set, to run FINALIZER once
       (funcall finalizer (--reduce (-zip-with #'nconc it acc) result-sets)))))
 
+(defvar org-node-before-update-tables-hook nil
+  "Hook run just before processing results from scan.")
+
 
 ;;;; Scan-finalizers
 
@@ -1115,7 +1118,7 @@ to FINALIZER."
         (push pbm org-node--problems))
       (when problems
         (message "org-node found issues, see M-x org-node-list-scan-problems"))
-      (run-hook-with-args 'org-node-rescan-hook found-files))))
+      (run-hook-with-args 'org-node-rescan-functions found-files))))
 
 (defcustom org-node-perf-eagerly-update-link-tables t
   "Update backlink tables on every save.
@@ -1310,7 +1313,7 @@ also necessary is `org-node--dirty-ensure-link-known' elsewhere."
 
 ;;;; Scanning: Etc
 
-;; FIXME: Sure, it detects them, but won't run `org-node-rescan-hook' on them
+;; FIXME: Sure, it detects them, but won't run `org-node-rescan-functions' on them
 (defvar org-node--idle-timer (timer-create)
   "Timer for intermittently checking `org-node-extra-id-dirs'.
 for new, changed or deleted files.
@@ -2002,9 +2005,6 @@ KEY, NAME and CAPTURE explained in `org-node-series-defs'."
                  (add-hook 'org-node-creation-hook adder)
                  (unwind-protect (org-node-create sortstr (org-id-new) key)
                    (remove-hook 'org-node-creation-hook adder))))))
-
-(defvar org-node-before-update-tables-hook nil
-  "Hook run just before processing results from scan.")
 
 (defun org-node--guess-daily-dir ()
   "Do not rely on this."
