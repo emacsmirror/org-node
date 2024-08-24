@@ -80,12 +80,13 @@
 ;;       directory
 
 ;; TODO: Let series dispatch have another "level" for nav keys after selecting
-;;       the series, so "j" "n" "p" are available
+;;       the series, so "j" "n" "p", "c" are available
 
 (require 'cl-lib)
 (require 'subr-x)
 (require 'seq)
 (require 'transient)
+(require 'bytecomp)
 (require 'persist)
 (require 'compat)
 (require 'dash)
@@ -1785,8 +1786,9 @@ org-roam."
                                    (equal (org-node-get-title node)
                                           (org-get-heading t t t t)))
                         (goto-char pos)
-                        (org-show-context)
-                        (org-show-entry)
+                        (if (org-at-heading-p)
+                            (org-show-entry)
+                          (org-show-context))
                         (recenter 0)))
                   (unless (pos-visible-in-window-p pos)
                     (goto-char pos))))
@@ -2404,8 +2406,7 @@ Also add a corresponding entry to `org-node-series-dispatch'."
                     (message "No capture template for series %s"
                              (plist-get series :name))))
               (setq org-node-current-series-key nil)))
-        (message "Choose series before navigating"))))
-   ])
+        (message "Choose series before navigating"))))])
 
 (defcustom org-node-series-that-marks-calendar nil
   "Key for the series that should mark days in the calendar.
@@ -2795,7 +2796,7 @@ When called interactively, always prompt for confirmation.
 
 Internal argument INTERACTIVE is automatically set."
   (interactive "p" org-mode)
-  (let ((path (file-truename buffer-file-name))
+  (let ((path buffer-file-truename)
         (buf (current-buffer))
         (title nil))
     (cond
@@ -2814,7 +2815,8 @@ Internal argument INTERACTIVE is automatically set."
                         (not (string-match-p org-node-renames-exclude path)))
            return t))
       (if (not (setq title (or (cadar (org-collect-keywords '("TITLE")))
-                               ;; No title, take first heading as title
+                               ;; No #+title, so take first heading as title
+                               ;; for this purpose
                                (save-excursion
                                  (without-restriction
                                    (goto-char 1)
@@ -2920,8 +2922,9 @@ so it matches the destination\\='s current title."
                                  desc (org-node-get-aliases node))))
                   (switch-to-buffer (current-buffer))
                   (goto-char end)
-                  (org-show-context)
-                  (org-show-entry)
+                  (if (org-at-heading-p)
+                      (org-show-entry)
+                    (org-show-context))
                   (recenter)
                   (highlight-regexp exact-link 'org-node--rewrite-face)
                   (unwind-protect
@@ -3324,8 +3327,9 @@ one of them is associated with a ROAM_REFS."
                                    'action `(lambda (_button)
                                               (org-id-goto ,origin)
                                               (goto-char ,pos)
-                                              (org-show-context)
-                                              (org-show-entry))
+                                              (if (org-at-heading-p)
+                                                  (org-show-entry)
+                                                (org-show-context)))
                                    'face 'link
                                    'follow-link t)
                            origin)
