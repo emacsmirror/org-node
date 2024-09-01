@@ -600,6 +600,7 @@ When called from Lisp, peek on any hash table HT."
         (add-hook 'org-roam-post-node-insert-hook #'org-node--dirty-ensure-link-known -50)
         (add-hook 'calendar-today-invisible-hook #'org-node--mark-days 5)
         (add-hook 'calendar-today-visible-hook #'org-node--mark-days 5)
+        (add-hook 'window-buffer-change-functions #'org-node--kill-blank-unsaved-buffers)
         (advice-add 'org-insert-link :after #'org-node--dirty-ensure-link-known)
         (advice-add 'rename-file :after #'org-node--handle-rename)
         (advice-add 'delete-file :after #'org-node--handle-delete)
@@ -613,6 +614,7 @@ When called from Lisp, peek on any hash table HT."
     (remove-hook 'org-roam-post-node-insert-hook #'org-node--dirty-ensure-link-known)
     (remove-hook 'calendar-today-invisible-hook #'org-node--mark-days)
     (remove-hook 'calendar-today-visible-hook #'org-node--mark-days)
+    (remove-hook 'window-buffer-change-functions #'org-node--kill-blank-unsaved-buffers)
     (advice-remove 'org-insert-link #'org-node--dirty-ensure-link-known)
     (advice-remove 'rename-file #'org-node--handle-rename)
     (advice-remove 'delete-file #'org-node--handle-delete)))
@@ -645,6 +647,27 @@ If not running, start it."
       (cancel-timer org-node--idle-timer)
       (setq org-node--idle-timer
             (run-with-idle-timer new-delay t #'org-node--scan-all)))))
+
+(defvar org-node--not-yet-saved nil
+  "List of buffers created to hold a new node.")
+
+(defun org-node--kill-blank-unsaved-buffers (&rest _)
+  "Kill buffers created by org-node that have become blank.
+
+This exists to allow you to create a node, especially a journal
+note for today, change your mind, do an undo to empty the buffer,
+then browse to the previous day\\='s note.  When later you want
+to create today\\='s note after all, the series :creator function
+should be made to run again, but will only do so if the buffer
+has been properly deleted since, thus this hook."
+  (unless (minibufferp)
+    (dolist (buf org-node--not-yet-saved)
+      (if (or (not (buffer-live-p buf))
+              (file-exists-p (buffer-file-name buf)))
+          (setq org-node--not-yet-saved (delq buf org-node--not-yet-saved))
+        (and (not (get-buffer-window buf t)) ;; buffer not visible
+             (string-blank-p (with-current-buffer buf (buffer-string)))
+             (kill-buffer buf))))))
 
 (defun org-node-cache-ensure (&optional synchronous force)
   "Ensure that org-node is ready for use.
@@ -1924,6 +1947,7 @@ which it gets some necessary variables."
                 "\n#+title: " org-node-proposed-title
                 "\n"))
       (goto-char (point-max))
+      (push (current-buffer) org-node--not-yet-saved)
       (run-hooks 'org-node-creation-hook))))
 
 ;;; TODO: Maybe move this to fakeroam.el
@@ -2027,6 +2051,7 @@ type the name of a node that does not exist.  That enables this
                   "\n:END:"
                   "\n#+title: " title
                   "\n"))
+        (push (current-buffer) org-node--not-yet-saved)
         (run-hooks 'org-node-creation-hook)))))
 
 
@@ -2740,29 +2765,27 @@ creation-date as more \"truthful\" than today\\='s date.
             (file-name-concat
              dir (concat (format-time-string org-node-datestamp-format)
                          (funcall org-node-slug-fn title)
-                         ".org")))
-           (source-path buffer-file-name))
+                         ".org"))))
       (if (file-exists-p path-to-write)
           (message "A file already exists named %s" path-to-write)
         (org-cut-subtree)
-        ;; Leave a link under the parent heading pointing to the subheading
-        ;; that was extracted.
-        (save-excursion
-          (without-restriction
-            (org-up-heading-or-point-min)
-            (goto-char (org-entry-end-position))
-            (if (org-invisible-p)
-                (message "Invisible area, not inserting link to extracted")
-              (open-line 1)
-              (insert "\n"
-                      (format-time-string
-                       (format "%s Created " (org-time-stamp-format nil t)))
-                      (org-link-make-string (concat "id:" id) title)
-                      "\n"))))
-        (save-buffer)
+        ;; Try to leave a link at the end of parent entry, pointing to the
+        ;; ID of subheading that was extracted.
+        (unless (bound-and-true-p org-capture-mode)
+          (widen)
+          (org-up-heading-or-point-min)
+          (goto-char (org-entry-end-position))
+          (if (org-invisible-p)
+              (message "Invisible area, not inserting link to extracted")
+            (open-line 1)
+            (insert "\n"
+                    (format-time-string
+                     (format "%s Created " (org-time-stamp-format nil t)))
+                    (org-link-make-string (concat "id:" id) title)
+                    "\n")
+            (org-node--dirty-ensure-link-known id)))
         (find-file path-to-write)
         (org-paste-subtree)
-        (save-buffer)
         (unless org-node-prefer-with-heading
           ;; Replace the root heading and its properties with file-level
           ;; keywords &c.
@@ -2784,10 +2807,11 @@ creation-date as more \"truthful\" than today\\='s date.
              "")
            "\n#+title: " title
            "\n"))
+        (org-node--dirty-ensure-node-known)
+        (push (current-buffer) org-node--not-yet-saved)
         (run-hooks 'org-node-creation-hook)
-        (save-buffer)
-        ;; TODO: arrange so the backlink-mode backlink appears
-        (org-node--scan-targeted (list path-to-write source-path))))))
+        (when org-node-backlink-mode
+          (org-node-backlink--fix-entry-here))))))
 
 ;; "Some people, when confronted with a problem, think
 ;; 'I know, I'll use regular expressions.'
