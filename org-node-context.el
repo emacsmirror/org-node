@@ -445,7 +445,7 @@ else briefly visit the file, go to the link and call
         (with-current-buffer (org-node--work-buffer-for (org-mem-file entry))
           (goto-char link-pos)
           (setq snippet (org-node-context--extract-entry-at-point)))
-        (with-current-buffer (org-mem-org-mode-scratch)
+        (with-current-buffer (org-mem-scratch)
           (erase-buffer)
           (insert snippet)
           (goto-char pos-diff)

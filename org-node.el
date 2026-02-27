@@ -19,7 +19,7 @@
 ;; URL:      https://github.com/meedstrom/org-node
 ;; Created:  2024-04-13
 ;; Keywords: org, hypermedia
-;; Package-Requires: ((emacs "29.1") (llama "0.5.0") (org-mem "0.29.2") (magit-section "4.3.0"))
+;; Package-Requires: ((emacs "29.1") (llama "0.5.0") (org-mem "0.32.0") (magit-section "4.3.0"))
 
 ;;; Commentary:
 
@@ -2534,7 +2534,7 @@ from ID links found in `org-mem--target<>links'."
   (let ((proceed (and (not current-prefix-arg) ;; Let C-u reset the file list.
                       org-node--lint-remaining-files
                       (equal fileloop--scan-function #'org-node--lint-scanner)))
-        (files (org-mem--list-files-from-fs)))
+        (files (mapcar #'car (org-mem--truenames-and-attrs))))
     (unless proceed
       (when (y-or-n-p (format "Lint %d files?" (length files)))
         (setq org-node--lint-warnings nil)
@@ -3286,7 +3286,7 @@ skips the overhead of creation.  To clean up, call
 `org-node--kill-work-buffers' explicitly."
   (let ((bufname (format " *org-node-work-%d*" (abs (sxhash file)))))
     (or (get-buffer bufname)
-        (with-current-buffer (org-mem-org-mode-scratch bufname)
+        (with-current-buffer (org-mem-scratch bufname)
           (push (current-buffer) org-node--work-buffers)
           (insert-file-contents file)
           ;; May be useful for `org-node-roam-accelerator-mode'.
@@ -3502,7 +3502,11 @@ from many sources.  To deal with that:
             (setq snippet (funcall org-roam-preview-function))
             (dolist (fn org-roam-preview-postprocess-functions)
               (setq snippet (funcall fn snippet)))))
-        (org-mem-fontify-like-org snippet)))))
+        (with-current-buffer (org-mem-scratch)
+          (erase-buffer)
+          (insert string)
+          (font-lock-ensure)
+          (buffer-string))))))
 
 ;;;###autoload
 (define-minor-mode org-node-roam-accelerator-mode
