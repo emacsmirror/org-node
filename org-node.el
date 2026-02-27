@@ -2282,20 +2282,59 @@ Or from ENTRY if provided."
   (org-node-cache-ensure)
   (let ((entry (or entry
                    (seq-random-elt (hash-table-values org-mem--id<>entry))))
-        (1arg-funs '(org-mem-active-timestamps
-                     org-mem-active-timestamps-int
-                     org-mem-clocks
-                     org-mem-clocks-int
-                     org-mem-closed
-                     org-mem-closed-int
-                     org-mem-deadline
-                     org-mem-deadline-int
-                     org-mem-file
+        (entry-funs '(org-mem-entry-active-timestamps
+                      org-mem-entry-active-timestamps-int
+                      org-mem-entry-children
+                      org-mem-entry-clocks
+                      org-mem-entry-clocks-int
+                      org-mem-entry-closed
+                      org-mem-entry-closed-int
+                      org-mem-entry-dangling-clocks
+                      org-mem-entry-deadline
+                      org-mem-entry-deadline-int
+                      org-mem-entry-file
+                      org-mem-entry-file-truename
+                      org-mem-entry-id
+                      org-mem-entry-keywords
+                      org-mem-entry-level
+                      org-mem-entry-lnum
+                      org-mem-entry-olpath
+                      org-mem-entry-olpath-with-file-title
+                      org-mem-entry-olpath-with-file-title-or-basename
+                      org-mem-entry-olpath-with-self
+                      org-mem-entry-olpath-with-self-with-file-title
+                      org-mem-entry-olpath-with-self-with-file-title-or-basename
+                      org-mem-entry-pos
+                      org-mem-entry-priority
+                      org-mem-entry-properties-inherited
+                      org-mem-entry-properties-local
+                      org-mem-entry-pseudo-id
+                      org-mem-entry-roam-aliases
+                      org-mem-entry-roam-refs
+                      org-mem-entry-scheduled
+                      org-mem-entry-scheduled-int
+                      org-mem-entry-stats-cookies
+                      org-mem-entry-subtree-p
+                      org-mem-entry-tags
+                      org-mem-entry-tags-inherited
+                      org-mem-entry-tags-local
+                      org-mem-entry-text
+                      org-mem-entry-title
+                      org-mem-entry-title-maybe
+                      org-mem-entry-todo-state
+                      org-mem-id-links-to-entry
+                      org-mem-links-in-entry
+                      org-mem-next-entry
+                      org-mem-previous-entry
+                      org-mem-roam-reflinks-to-entry))
+        (file-funs '(org-mem-entries-in-file
                      org-mem-file-attributes
                      org-mem-file-char-count
                      org-mem-file-coding-system
                      org-mem-file-id-strict
                      org-mem-file-id-topmost
+                     org-mem-file-keywords
+                     org-mem-file-known-p
                      org-mem-file-line-count
                      org-mem-file-mtime
                      org-mem-file-mtime-floor
@@ -2303,37 +2342,8 @@ Or from ENTRY if provided."
                      org-mem-file-size
                      org-mem-file-title-or-basename
                      org-mem-file-title-strict
-                     org-mem-file-title-topmost
-                     org-mem-file-truename
-                     org-mem-id
-                     org-mem-id-links-to-entry
-                     org-mem-level
-                     org-mem-links-in-entry
-                     org-mem-lnum
-                     org-mem-next-entry
-                     org-mem-olpath
-                     org-mem-olpath-with-self
-                     org-mem-olpath-with-file-title
-                     org-mem-olpath-with-file-title-or-basename
-                     org-mem-olpath-with-self-with-file-title
-                     org-mem-olpath-with-self-with-file-title-or-basename
-                     org-mem-pos
-                     org-mem-previous-entry
-                     org-mem-priority
-                     org-mem-properties-inherited
-                     org-mem-properties
-                     org-mem-roam-aliases
-                     org-mem-roam-reflinks-to-entry
-                     org-mem-roam-refs
-                     org-mem-scheduled
-                     org-mem-scheduled-int
-                     org-mem-subtree-p
-                     org-mem-tags
-                     org-mem-tags-inherited
-                     org-mem-tags-local
-                     org-mem-title
-                     org-mem-title-maybe
-                     org-mem-text)))
+                     org-mem-file-title-topmost)))
+
     (pop-to-buffer (get-buffer-create "*org-node example*" t))
     (setq-local buffer-read-only t)
     (setq-local revert-buffer-function (lambda (&rest _)
@@ -2352,16 +2362,25 @@ Or from ENTRY if provided."
           (win-start-line (line-number-at-pos (window-start)))
           (win-line (line-number-at-pos)))
       (erase-buffer)
+      (insert "Example data taken from entry titled \""
+              (org-mem-entry-title entry) "\"\n"
+              "(Type g for a random ID-node)\n"
+              "(Type n or p for next/previous entry in same file)\n\n")
       (insert (with-temp-buffer
                 (delay-mode-hooks (emacs-lisp-mode))
-                (insert "Example data taken from random node titled \""
-                        (org-mem-entry-title entry) "\"\n"
-                        "(Type g for a new example)\n\n")
-                (cl-loop for func in 1arg-funs
-                         do (insert "(" (symbol-name func) " NODE) => "
+                (cl-loop for func in entry-funs
+                         do (insert "(" (symbol-name func) " ENTRY) => "
                                     (prin1-to-string (funcall func entry))
                                     "\n"))
                 (align-regexp (point-min) (point-max) "\\(\\s-*\\) => ")
+                (newline)
+                (save-excursion
+                  (cl-loop with file = (org-mem-entry-file entry)
+                           for func in file-funs
+                           do (insert "(" (symbol-name func) " (org-mem-entry-file ENTRY)) => "
+                                      (prin1-to-string (funcall func file))
+                                      "\n")))
+                (align-regexp (point) (point-max) "\\(\\s-*\\) => ")
                 (font-lock-ensure)
                 (buffer-string)))
       (goto-char (point-min))
