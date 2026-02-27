@@ -8,7 +8,7 @@
 
 @dircategory Emacs
 @direntry
-* Org-node: (org-node). Link org-id entries into a network.
+* Org-Node: (org-node). Link org-id entries into a network.
 @end direntry
 
 @finalout
